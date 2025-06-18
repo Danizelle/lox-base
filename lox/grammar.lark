@@ -1,17 +1,59 @@
 ?start     : program
 
-program    : stmt*
+program    : declaration*
 
-?stmt      : expr ";"
+?declaration : class_decl
+             | fun_decl
+             | var_decl
+             | stmt
+
+class_decl   : "class" VAR "{" "}" -> class_declaration
+
+fun_decl   : "fun" VAR "(" fun_params ")" block -> function_declaration
+fun_params : [VAR ("," VAR)*]
+
+?stmt      : expr ";" -> expr_stmt
            | print_cmd
-           // | if_cmd
-           // | for_cmd
-           // | ...
+           | block
+           | if_cmd
+           | while_cmd
+           | for_cmd
+           | return_cmd
+
+for_cmd : "for" "(" for_init for_cond ";" for_incr ")" stmt -> for_cmd
+
+?for_init : var_decl
+          | expr ";"
+          | ";"   -> empty_init
+
+?for_cond : expr
+          |         -> empty_cond
+
+?for_incr : expr
+          |         -> empty_incr
+
+while_cmd  : "while" "(" expr ")" stmt -> while_cmd
+         
+if_cmd   : "if" "(" expr ")" stmt ("else" stmt)? -> if_cmd
+
+block      : "{" declaration* "}"
 
 print_cmd  : "print" expr ";"
 
+return_cmd : "return" expr? ";" -> return_stmt
+
+var_decl   : "var" VAR ("=" expr)? ";" -> var_decl
+
 // EXPRESSÕES
-?expr      : test
+?expr      : assignment
+
+?assignment  : getattr "=" assignment   -> setattr_assign
+           | VAR "=" assignment   -> assign
+           | logic
+
+?logic     : logic "or" test -> or_
+           | logic "and" test -> and_
+           | test
 
 ?test      : test "==" cmp  -> eq
            | test "!=" cmp  -> ne
@@ -27,23 +69,30 @@ print_cmd  : "print" expr ";"
            | factor "-" term  -> sub
            | term
 
-?term      : term "*" atom   -> mul
-           | term "/" atom   -> div 
+?term      : term "*" unary  -> mul
+           | term "/" unary   -> div 
+           | unary
+
+?unary     : "-" unary -> neg
+           | "!" unary -> not_
            | atom
 
-?atom      : NUMBER 
+?atom      : call
+           | getattr
+           | NUMBER
            | BOOL
            | VAR
            | STRING
            | NIL
-           | "(" cmp ")"
-           | call
+           | "(" expr ")"
 
-call       : VAR "(" params ")"
-params     : [ expr ("," expr )* ]
+getattr    : atom "." VAR
+ 
+call       : atom "(" params ")"
+params     : [expr ("," expr)*]
 
 BOOL.2     : "true" | "false"
-VAR.1      : /[a-z_]\w*/
+VAR        : /[a-zA-Z_]\w*/
 NUMBER     : /([1-9][0-9]*|0)(\.[0-9]+)?/ 
 STRING     : /"[^"]*"/
 NIL.2      : "nil"

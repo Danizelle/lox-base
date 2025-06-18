@@ -48,17 +48,60 @@ class LoxTransformer(Transformer):
     ne = op_handler(op.ne)
 
     # Outras expressões
-    def call(self, name: Var, params: list):
-        return Call(name.name, params)
+    def call(self, callee: Expr, params=None):
+        return Call(callee, params or [])
         
     def params(self, *args):
-        params = list(args)
-        return params
+        return list(args)
 
-    # Comandos
+    def getattr(self, obj, name):
+        return Getattr(obj, name.name)
+
+    # Operadores unários
+    def neg(self, operand):
+        return UnaryOp(operand, op.neg) 
+
+    def not_(self, operand):
+        return UnaryOp(operand, op.not_)
+    
+    # Operadores lógicos
+    def and_(self, left, right):
+        return And(left, right)
+    
+    def or_(self, left, right):
+        return Or(left, right)
+    
+    # Atribuições
+    def assign(self, name: Var, value: Expr):
+        return Assign(name.name, value)
+
+    def setattr_assign(self, target, value):
+        return Setattr(target.obj, target.name, value)
+    
+    # Comandos e literais
     def print_cmd(self, expr):
         return Print(expr)
 
+    def var_decl(self, name, initializer=None):
+        if initializer is None:
+            initializer = Literal(None)
+        return VarDef(name.name, initializer)
+
+    def block(self, *stmts):
+        return Block(list(stmts))
+    
+    def if_cmd(self, condition, then_branch, else_branch=None):
+        if else_branch is None:
+            else_branch = Block([]) # Bloco vazio se não houver else
+        return If(condition, then_branch, else_branch)
+
+    def while_cmd(self, condition, body):
+        return While(condition, body)
+    
+    def expr_stmt(self, expr):
+        return ExprStmt(expr)
+
+    # Literais e Variáveis
     def VAR(self, token):
         name = str(token)
         return Var(name)
@@ -76,3 +119,56 @@ class LoxTransformer(Transformer):
 
     def BOOL(self, token):
         return Literal(token == "true")
+
+    # Tratamento de 'for' (desugaring para 'while')
+    def empty_init(self):
+        return None 
+
+    def empty_cond(self):
+        return Literal(True)
+
+    def empty_incr(self):
+        return None
+
+    def for_cmd(self, init, cond, incr, body):
+        # Constrói o corpo do while
+        while_body = [body]
+        if incr is not None:
+            while_body.append(ExprStmt(incr))
+        
+        # Constrói o laço while
+        if cond is None:
+            cond = Literal(True)
+        loop = While(cond, Block(while_body))
+
+        # Adiciona o inicializador, se existir
+        if init is not None:
+            return Block([init, loop])
+        
+        return loop
+    
+    # Funções e retornos
+    def return_stmt(self, value=None):
+        return Return(value)
+
+    def function_declaration(self, name, params, body):
+        return Function(name.name, params or [], body)
+
+    def fun_params(self, *params):
+        return list(params)
+    
+    def this(self, _):
+        return This()
+
+    def super_getattr(self, name):
+        return Super(name.name)
+    
+    def class_declaration(self, name):
+        # 'name' é um nó Var, então pegamos seu nome como string
+        return Class(name.name)
+
+    def function_declaration(self, name, params, body):
+        return Function(name.name, params or [], body)
+
+    def fun_params(self, *params):
+        return list(params)

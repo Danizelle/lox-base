@@ -136,6 +136,18 @@ class Ctx:
         if self.parent is None:
             return False
         return self.parent.parent is None
+    
+    def assign(self, key: str, value: "Value") -> None:
+        """
+        Encontra a ocorrência de key mais próxima do topo da pilha e 
+        troca seu valor por value. Levanta erro se a variável não existir.
+        """
+        if key in self.scope:
+            self.scope[key] = value
+        elif self.parent is not None:
+            self.parent.assign(key, value)
+        else:
+            raise NameError(f"Variável '{key}' não declarada.")
 
 
 def pretty_scope(env: ScopeDict, index: int) -> str:
