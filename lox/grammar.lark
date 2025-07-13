@@ -81,15 +81,18 @@ var_decl   : "var" VAR ("=" expr)? ";" -> var_decl
 
 ?atom      : call
            | getattr
+           | super_getattr
            | NUMBER
            | BOOL
            | VAR
            | STRING
            | NIL
            | THIS
+           | SUPER
            | "(" expr ")"
 
 getattr    : atom "." VAR
+super_getattr : SUPER "." VAR
  
 call       : atom "(" params ")"
 params     : [expr ("," expr)*]
@@ -100,6 +103,7 @@ NUMBER     : /([1-9][0-9]*|0)(\.[0-9]+)?/
 STRING     : /"[^"]*"/
 NIL.2      : "nil"
 THIS.2     : "this"
+SUPER.2    : "super"
 COMMENT    : "//" /[^\n]*/
 
 %ignore /\s/ | COMMENT

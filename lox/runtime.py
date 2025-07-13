@@ -139,31 +139,7 @@ class LoxFunction:
             raise TypeError(f"'{self.name}' esperava {len(param_names)} argumentos, mas recebeu {len(args)}.")
 
         local_env = dict(zip(param_names, args))
-
-        # Se o método está sendo chamado como método de instância, o primeiro argumento é a instância (this)
-        this = None
-        supercls = None
-        if hasattr(self, "bind_instance"):
-            this = self.bind_instance
-        elif self.params and self.params[0] == "this":
-            # Heurística: se o primeiro parâmetro é 'this', provavelmente é um método
-            this = args[0] if args else None
-        # Tenta descobrir a superclasse
-        if hasattr(self, "bind_superclass"):
-            supercls = self.bind_superclass
-        elif hasattr(self.ctx, "superclass"):
-            supercls = self.ctx.superclass
-
-        # Adiciona 'this' e 'super' ao contexto se disponíveis
-        if this is not None or supercls is not None:
-            special = {}
-            if this is not None:
-                special["this"] = this
-            if supercls is not None:
-                special["super"] = supercls
-            call_ctx = self.ctx.push({**local_env, **special})
-        else:
-            call_ctx = self.ctx.push(local_env)
+        call_ctx = self.ctx.push(local_env)
 
         try:
             self.body.eval(call_ctx)

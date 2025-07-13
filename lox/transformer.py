@@ -163,7 +163,10 @@ class LoxTransformer(Transformer):
     def THIS(self, token):
         return This()
 
-    def super_getattr(self, name):
+    def SUPER(self, token):
+        return Var("super")
+
+    def super_getattr(self, super_token, name):
         return Super(name.name)
     
     def class_declaration(self, name, *args):

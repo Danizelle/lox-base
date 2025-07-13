@@ -135,18 +135,26 @@ class This(Expr):
 
 @dataclass
 class Super(Expr):
+    """Acesso a método ou atributo da superclasse."""
     name: str
 
     def eval(self, ctx: Ctx):
-        # Procura a instância atual (this) no contexto
-        instance = ctx['this']
-        # Procura a superclasse no contexto
-        superclass = ctx['super']
-        # Busca o método na superclasse
-        method = superclass.get_method(self.name)
-        # Retorna o método ligado à instância
-        return lambda *args: method(instance, *args)
-    """Acesso a método ou atributo da superclasse."""
+        try:
+            # Procura a instância atual (this) no contexto
+            instance = ctx['this']
+            # Procura a superclasse no contexto
+            superclass = ctx['super']
+            # Busca o método na superclasse
+            method = superclass.get_method(self.name)
+            # Retorna o método ligado à instância
+            return method.bind(instance)
+        except KeyError as e:
+            if 'this' in str(e):
+                raise NameError(f"variável this não existe!")
+            elif 'super' in str(e):
+                raise NameError(f"variável super não existe!")
+            else:
+                raise
 
 @dataclass
 class Assign(Expr):
@@ -358,16 +366,21 @@ class Class(Stmt):
                 raise LoxError(f"'{self.base.name}' não é uma classe")
             superclass = base_value
         
+        # Criamos um escopo para os métodos possivelmente diferente do escopo 
+        # onde a classe está declarada
+        if superclass is None:
+            method_ctx = ctx
+        else:
+            method_ctx = ctx.push({"super": superclass})
+        
         # Avaliamos cada método
         methods = {}
         for method in self.methods:
             method_name = method.name
             method_body = method.body
-            method_args = method.params
-            method_impl = LoxFunction(method_name, method_args, method_body, ctx)
-            # Adiciona referência à superclasse para métodos
-            if superclass is not None:
-                method_impl.bind_superclass = superclass
+            method_args = [p.name for p in method.params]
+            # Usa o contexto correto que pode incluir 'super'
+            method_impl = LoxFunction(method_name, method_args, method_body, method_ctx)
             methods[method_name] = method_impl
 
         # Cria a classe e a define no contexto
