@@ -1,4 +1,5 @@
 import builtins
+import uuid
 from dataclasses import dataclass, field
 from types import BuiltinFunctionType, FunctionType
 from typing import TYPE_CHECKING, Any, Optional
@@ -110,6 +111,7 @@ class LoxFunction:
     params: list[str]
     body: "Block"
     ctx: Ctx
+    _id: str = field(default_factory=lambda: str(uuid.uuid4()), init=False)
 
     def __str__(self) -> str:
         if self.name:
@@ -241,7 +243,13 @@ def truediv(a: float, b: float) -> float:
     """Operador de divisão Lox (/)."""
     _check_numbers(a, b)
     if b == 0:
-        raise LoxError("Division by zero.")
+        if a == 0:
+            # 0/0 deve retornar NaN
+            return float('nan')
+        else:
+            # x/0 onde x != 0 deve retornar infinito ou gerar erro
+            # Vou manter como erro por enquanto para outros casos
+            raise LoxError("Division by zero.")
     return a / b
 
 def lt(a: float, b: float) -> bool:

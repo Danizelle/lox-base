@@ -68,6 +68,28 @@ class Var(Expr):
                 f"Cannot use reserved word '{self.name}' as a variable name.",
                 token=self.name
             )
+        
+        # Desafio 04: verifica se a variável está sendo usada em sua própria inicialização
+        # Verifica se algum pai é uma VarDef com o mesmo nome
+        for parent_cursor in cursor.parents():
+            parent_node = parent_cursor.node
+            if isinstance(parent_node, VarDef) and parent_node.name == self.name:
+                # Verifica se estamos dentro do inicializador (não é a declaração global)
+                # Se parent_cursor tem escopo diferente, significa que estamos em um bloco local
+                grandparent_is_block = False
+                try:
+                    grandparent = parent_cursor.parent()
+                    if isinstance(grandparent.node, Block):
+                        grandparent_is_block = True
+                except:
+                    pass
+                
+                if grandparent_is_block:
+                    raise SemanticError(
+                        "Can't read local variable in its own initializer.",
+                        token=self.name
+                    )
+                break
 
 @dataclass
 class Literal(Expr):
@@ -279,12 +301,37 @@ class Return(Stmt):
 
     # Validação Semântica para Return
     def validate_self(self, cursor: Cursor):
-        """Verifica se return está dentro de uma função."""
+        """Verifica se return está dentro de uma função e se não está retornando valor de um construtor."""
         if not cursor.is_scoped_to(Function):
             raise SemanticError(
                 "Can't return from top-level code.",
                 token="return"
             )
+        
+        # Desafio 02: verifica se está em um método init e se está tentando retornar um valor
+        if self.value is not None:  # Se há um valor sendo retornado
+            try:
+                function_cursor = cursor.function_scope()
+                function_node = function_cursor.node
+                
+                # Verifica se é um método init
+                if function_node.name == "init":
+                    # Verifica se a função init está diretamente dentro de uma classe (é um método)
+                    # Percorre os pais da função para ver se o pai direto é uma classe
+                    try:
+                        function_parent = function_cursor.parent()
+                        if isinstance(function_parent.node, Class):
+                            # É um método init da classe
+                            raise SemanticError(
+                                "Can't return a value from an initializer.",
+                                token="return"
+                            )
+                    except ValueError:
+                        # Não tem pai ou pai não é uma classe, então é função aninhada
+                        pass
+            except ValueError:
+                # Não está em uma função, mas isso já foi tratado acima
+                pass
 
 @dataclass
 class VarDef(Stmt):
@@ -440,3 +487,12 @@ class Class(Stmt):
         lox_class = LoxClass(self.name, methods, superclass)
         ctx.var_def(self.name, lox_class)
         return lox_class
+
+    # Validação Semântica para Class - Desafio 01
+    def validate_self(self, cursor: Cursor):
+        """Verifica se a classe não está tentando herdar de si mesma."""
+        if self.base is not None and self.base.name == self.name:
+            raise SemanticError(
+                "A class can't inherit from itself.",
+                token=self.name
+            )
