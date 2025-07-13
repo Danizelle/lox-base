@@ -88,7 +88,6 @@ var_decl   : "var" VAR ("=" expr)? ";" -> var_decl
            | STRING
            | NIL
            | THIS
-           | SUPER
            | "(" expr ")"
 
 getattr    : atom "." VAR
