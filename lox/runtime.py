@@ -1,7 +1,7 @@
 import builtins
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import BuiltinFunctionType, FunctionType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 from .ctx import Ctx
 
@@ -21,12 +21,42 @@ class LoxReturn(Exception):
 class LoxClass:
     """Representa uma classe Lox em tempo de execução."""
     name: str
+    methods: dict[str, "LoxFunction"]
+    base: Optional["LoxClass"] = None
 
     def __call__(self, *args):
-        # "Chamar" uma classe em Lox cria uma nova instância dela.
-        # Por enquanto, ignoramos os argumentos, pois ainda não temos inicializadores (init).
-        instance = LoxInstance(klass=self)
+        """
+        self.__call__(x, y) <==> self(x, y)
+
+        Em Lox, criamos instâncias de uma classe chamando-a como uma função.
+        """
+        instance = LoxInstance(self)
+        
+        # Se houver um método init, chame-o com os argumentos fornecidos
+        try:
+            initializer = self.get_method("init")
+            initializer(instance, *args)
+        except LoxError:
+            if len(args) > 0:
+                raise TypeError(f"Esperava 0 argumentos mas recebeu {len(args)}")
+            
         return instance
+
+    def get_method(self, name: str) -> "LoxFunction":
+        """
+        Procura o método na classe atual ou em suas bases.
+        Levanta LoxError se não encontrar.
+        """
+        # Procura na classe atual
+        if name in self.methods:
+            return self.methods[name]
+        
+        # Se não encontrou e tiver uma classe base, procura nela
+        if self.base is not None:
+            return self.base.get_method(name)
+        
+        # Se não encontrou em lugar nenhum, levanta exceção
+        raise LoxError(f"Método '{name}' não encontrado na classe '{self.name}'")
 
     def __str__(self) -> str:
         return self.name
@@ -35,7 +65,27 @@ class LoxClass:
 class LoxInstance:
     """Representa uma instância de uma classe Lox."""
     klass: LoxClass
+    fields: dict[str, Any] = field(default_factory=dict)
 
+    def __getattr__(self, name: str):
+        """Implementa a busca de atributos em instâncias Lox."""
+        if name in self.fields:
+            return self.fields[name]
+        
+        try:
+            return self.klass.get_method(name)
+        except LoxError:
+            raise LoxError(f"Campo '{name}' não existe")
+
+    def get_field(self, name: str):
+        """Retorna o valor de um campo da instância."""
+        return self.__getattr__(name)
+
+    def set_field(self, name: str, value):
+        """Define o valor de um campo da instância."""
+        self.fields[name] = value
+        return value
+    
     def __str__(self) -> str:
         return f"{self.klass.name} instance"
 
@@ -55,15 +105,38 @@ class LoxFunction:
     def call(self, args: list["Value"]):
         if len(args) != len(self.params):
             raise TypeError(f"'{self.name}' esperava {len(self.params)} argumentos, mas recebeu {len(args)}.")
-        
+
         local_env = dict(zip(self.params, args))
-        call_ctx = self.ctx.push(local_env)
+
+        # Se o método está sendo chamado como método de instância, o primeiro argumento é a instância (this)
+        this = None
+        supercls = None
+        if hasattr(self, "bind_instance"):
+            this = self.bind_instance
+        elif self.params and self.params[0] == "this":
+            # Heurística: se o primeiro parâmetro é 'this', provavelmente é um método
+            this = args[0] if args else None
+        # Tenta descobrir a superclasse
+        if hasattr(self, "bind_superclass"):
+            supercls = self.bind_superclass
+        elif hasattr(self.ctx, "superclass"):
+            supercls = self.ctx.superclass
+
+        # Adiciona 'this' e 'super' ao contexto se disponíveis
+        if this is not None or supercls is not None:
+            special = {}
+            if this is not None:
+                special["this"] = this
+            if supercls is not None:
+                special["super"] = supercls
+            call_ctx = self.ctx.push({**local_env, **special})
+        else:
+            call_ctx = self.ctx.push(local_env)
 
         try:
             self.body.eval(call_ctx)
         except LoxReturn as ex:
             return ex.value
-        
         return None
 
     def __call__(self, *args):

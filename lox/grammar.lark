@@ -7,7 +7,9 @@ program    : declaration*
              | var_decl
              | stmt
 
-class_decl   : "class" VAR "{" "}" -> class_declaration
+class_decl   : "class" VAR ("<" VAR)? "{" method* "}" -> class_declaration
+
+method      : VAR "(" fun_params ")" block
 
 fun_decl   : "fun" VAR "(" fun_params ")" block -> function_declaration
 fun_params : [VAR ("," VAR)*]

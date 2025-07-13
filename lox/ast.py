@@ -1,9 +1,9 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import Callable
-from .runtime import LoxFunction, LoxReturn, LoxClass, print as lox_print
+from typing import Callable, Optional
 
 from .ctx import Ctx
+from .runtime import LoxFunction, LoxReturn, LoxClass, LoxError, LoxInstance, print as lox_print
 
 # Importações para a validação semântica
 from .node import Node, Cursor
@@ -127,6 +127,17 @@ class This(Expr):
 
 @dataclass
 class Super(Expr):
+    name: str
+
+    def eval(self, ctx: Ctx):
+        # Procura a instância atual (this) no contexto
+        instance = ctx['this']
+        # Procura a superclasse no contexto
+        superclass = ctx['super']
+        # Busca o método na superclasse
+        method = superclass.get_method(self.name)
+        # Retorna o método ligado à instância
+        return lambda *args: method(instance, *args)
     """Acesso a método ou atributo da superclasse."""
 
 @dataclass
@@ -263,7 +274,6 @@ class Function(Stmt):
     body: Block
 
     def eval(self, ctx: Ctx):
-        # ... (código eval existente, sem alterações)
         param_names = [p.name for p in self.params]
         function = LoxFunction(self.name, param_names, self.body, ctx)
         ctx.var_def(self.name, function)
@@ -306,10 +316,33 @@ class Function(Stmt):
 
 @dataclass
 class Class(Stmt):
-    """Representa uma declaração de classe."""
+    """Representa uma declaração de classe no código."""
     name: str
+    methods: list["Function"]
+    base: Optional[Var]
 
     def eval(self, ctx: Ctx):
-        klass = LoxClass(name=self.name)
-        ctx.var_def(self.name, klass)
-        return None
+        # Carrega a superclasse, caso exista
+        superclass = None
+        if self.base is not None:
+            base_value = self.base.eval(ctx)
+            if not isinstance(base_value, LoxClass):
+                raise LoxError(f"'{self.base.name}' não é uma classe")
+            superclass = base_value
+        
+        # Avaliamos cada método
+        methods = {}
+        for method in self.methods:
+            method_name = method.name
+            method_body = method.body
+            method_args = method.params
+            method_impl = LoxFunction(method_name, method_args, method_body, ctx)
+            # Adiciona referência à superclasse para métodos
+            if superclass is not None:
+                method_impl.bind_superclass = superclass
+            methods[method_name] = method_impl
+
+        # Cria a classe e a define no contexto
+        lox_class = LoxClass(self.name, methods, superclass)
+        ctx.var_def(self.name, lox_class)
+        return lox_class

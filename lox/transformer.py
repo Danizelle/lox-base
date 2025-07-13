@@ -163,9 +163,46 @@ class LoxTransformer(Transformer):
     def super_getattr(self, name):
         return Super(name.name)
     
-    def class_declaration(self, name):
-        # 'name' é um nó Var, então pegamos seu nome como string
-        return Class(name.name)
+    def class_declaration(self, name, *args):
+        """
+        Transforma a declaração de uma classe.
+        Aceita:
+        - class A {}
+        - class A { ... }
+        - class A < B { ... }
+        """
+        methods = []
+        base = None
+        if args:
+            # Se só tem um argumento, pode ser uma lista de métodos ou um único método
+            if len(args) == 1:
+                m = args[0]
+                if isinstance(m, list):
+                    methods = m
+                else:
+                    methods = [m]
+            else:
+                # Base e métodos
+                base = args[0]
+                m = args[1]
+                if isinstance(m, list):
+                    methods = m
+                else:
+                    methods = [m]
+        # Garante que todos os métodos são Function
+        from lark.tree import Tree
+        from lark.tree import Tree
+        new_methods = []
+        for m in methods:
+            if isinstance(m, Tree) and m.data == 'method':
+                method_name = m.children[0]
+                method_params = m.children[1]
+                method_body = m.children[2]
+                new_methods.append(Function(method_name.name, method_params, method_body))
+            elif isinstance(m, Function):
+                new_methods.append(m)
+            # ignora Var e outros tipos
+        return Class(name.name, new_methods, base)
 
     def function_declaration(self, name, params, body):
         return Function(name.name, params or [], body)
