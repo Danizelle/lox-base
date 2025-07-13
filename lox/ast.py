@@ -133,6 +133,15 @@ class This(Expr):
         except KeyError:
             raise NameError(f"variável this não existe!")
 
+    # Validação Semântica para This
+    def validate_self(self, cursor: Cursor):
+        """Verifica se this está dentro de um método de classe."""
+        if not cursor.is_scoped_to(Class):
+            raise SemanticError(
+                "Can't use 'this' outside of a class.",
+                token="this"
+            )
+
 @dataclass
 class Super(Expr):
     """Acesso a método ou atributo da superclasse."""
@@ -155,6 +164,32 @@ class Super(Expr):
                 raise NameError(f"variável super não existe!")
             else:
                 raise
+
+    # Validação Semântica para Super
+    def validate_self(self, cursor: Cursor):
+        """Verifica se super está dentro de um método de classe que tem superclasse."""
+        # Primeiro verifica se está dentro de uma classe
+        if not cursor.is_scoped_to(Class):
+            raise SemanticError(
+                "Can't use 'super' outside of a class.",
+                token="super"
+            )
+        
+        # Depois verifica se a classe tem superclasse
+        try:
+            class_cursor = cursor.class_scope()
+            class_node = class_cursor.node
+            if class_node.base is None:
+                raise SemanticError(
+                    "Can't use 'super' in a class with no superclass.",
+                    token="super"
+                )
+        except ValueError:
+            # Isso não deveria acontecer já que verificamos is_scoped_to(Class) acima
+            raise SemanticError(
+                "Can't use 'super' outside of a class.",
+                token="super"
+            )
 
 @dataclass
 class Assign(Expr):
@@ -232,6 +267,15 @@ class Return(Stmt):
     def eval(self, ctx: Ctx):
         return_value = self.value.eval(ctx) if self.value else None
         raise LoxReturn(return_value)
+
+    # Validação Semântica para Return
+    def validate_self(self, cursor: Cursor):
+        """Verifica se return está dentro de uma função."""
+        if not cursor.is_scoped_to(Function):
+            raise SemanticError(
+                "Can't return from top-level code.",
+                token="return"
+            )
 
 @dataclass
 class VarDef(Stmt):
