@@ -159,6 +159,13 @@ class Getattr(Expr):
 
     def eval(self, ctx: Ctx):
         obj_value = self.obj.eval(ctx)
+        # Se for uma instância de LoxClass, buscar método corretamente
+        from .runtime import LoxClass
+        if isinstance(obj_value, LoxClass):
+            try:
+                return obj_value.get_method(self.name)
+            except Exception:
+                raise AttributeError(f"O objeto {obj_value} não possui o atributo '{self.name}'")
         try:
             return getattr(obj_value, self.name)
         except AttributeError:
