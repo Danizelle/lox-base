@@ -35,7 +35,8 @@ class LoxClass:
         # Se houver um método init, chame-o com os argumentos fornecidos
         try:
             initializer = self.get_method("init")
-            initializer(instance, *args)
+            bound_initializer = initializer.bind(instance)
+            bound_initializer(*args)
         except LoxError:
             if len(args) > 0:
                 raise TypeError(f"Esperava 0 argumentos mas recebeu {len(args)}")
@@ -73,7 +74,20 @@ class LoxInstance:
             return self.fields[name]
         
         try:
-            return self.klass.get_method(name)
+            method = self.klass.get_method(name)
+            # Para o método init, usar comportamento especial
+            if name == "init":
+                bound_method = method.bind(self)
+                return LoxInitFunction(
+                    bound_method.name,
+                    bound_method.params,
+                    bound_method.body,
+                    bound_method.ctx,
+                    self
+                )
+            else:
+                # Associa o método à instância atual
+                return method.bind(self)
         except LoxError:
             raise LoxError(f"Campo '{name}' não existe")
 
@@ -102,11 +116,29 @@ class LoxFunction:
             return f"<fn {self.name}>"
         return "<fn>"
 
-    def call(self, args: list["Value"]):
-        if len(args) != len(self.params):
-            raise TypeError(f"'{self.name}' esperava {len(self.params)} argumentos, mas recebeu {len(args)}.")
+    def bind(self, obj: "Value") -> "LoxFunction":
+        """Associa essa função a um this específico."""
+        # Cria uma nova função com o contexto que inclui o 'this'
+        return LoxFunction(
+            self.name,
+            self.params,
+            self.body,
+            self.ctx.push({"this": obj})
+        )
 
-        local_env = dict(zip(self.params, args))
+    def call(self, args: list["Value"]):
+        # Converte os parâmetros para strings se forem objetos Var
+        param_names = []
+        for param in self.params:
+            if hasattr(param, 'name'):
+                param_names.append(param.name)
+            else:
+                param_names.append(str(param))
+                
+        if len(args) != len(param_names):
+            raise TypeError(f"'{self.name}' esperava {len(param_names)} argumentos, mas recebeu {len(args)}.")
+
+        local_env = dict(zip(param_names, args))
 
         # Se o método está sendo chamado como método de instância, o primeiro argumento é a instância (this)
         this = None
@@ -141,6 +173,17 @@ class LoxFunction:
 
     def __call__(self, *args):
         return self.call(list(args))
+
+@dataclass
+class LoxInitFunction(LoxFunction):
+    """Representa um método init vinculado a uma instância."""
+    instance: "LoxInstance"
+    
+    def __call__(self, *args):
+        # Executa o método init normalmente
+        super().call(list(args))
+        # Mas sempre retorna a instância em vez do resultado
+        return self.instance
 
 # --- Funções de Semântica do Lox ---
 

@@ -159,6 +159,9 @@ class LoxTransformer(Transformer):
     
     def this(self, _):
         return This()
+    
+    def THIS(self, token):
+        return This()
 
     def super_getattr(self, name):
         return Super(name.name)
@@ -168,44 +171,29 @@ class LoxTransformer(Transformer):
         Transforma a declaração de uma classe.
         Aceita:
         - class A {}
-        - class A { ... }
-        - class A < B { ... }
+        - class A { method1, method2, ... }
+        - class A < B {}
+        - class A < B { method1, method2, ... }
         """
         methods = []
         base = None
-        if args:
-            # Se só tem um argumento, pode ser uma lista de métodos ou um único método
-            if len(args) == 1:
-                m = args[0]
-                if isinstance(m, list):
-                    methods = m
-                else:
-                    methods = [m]
-            else:
-                # Base e métodos
-                base = args[0]
-                m = args[1]
-                if isinstance(m, list):
-                    methods = m
-                else:
-                    methods = [m]
-        # Garante que todos os métodos são Function
-        from lark.tree import Tree
-        from lark.tree import Tree
-        new_methods = []
-        for m in methods:
-            if isinstance(m, Tree) and m.data == 'method':
-                method_name = m.children[0]
-                method_params = m.children[1]
-                method_body = m.children[2]
-                new_methods.append(Function(method_name.name, method_params, method_body))
-            elif isinstance(m, Function):
-                new_methods.append(m)
-            # ignora Var e outros tipos
-        return Class(name.name, new_methods, base)
-
-    def function_declaration(self, name, params, body):
+        
+        # Se não há argumentos, é uma classe vazia
+        if not args:
+            return Class(name.name, [], None)
+        
+        # Verifica se há herança
+        if len(args) >= 1 and isinstance(args[0], Var):
+            # Primeiro argumento é a classe base
+            base = args[0]
+            # Métodos vêm depois
+            methods = list(args[1:])
+        else:
+            # Todos os argumentos são métodos
+            methods = list(args)
+        
+        return Class(name.name, methods, base)
+    
+    def method(self, name, params, body):
+        """Transforma um método de classe."""
         return Function(name.name, params or [], body)
-
-    def fun_params(self, *params):
-        return list(params)

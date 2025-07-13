@@ -1,5 +1,5 @@
 from abc import ABC
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from .ctx import Ctx
@@ -124,6 +124,14 @@ class Call(Expr):
 @dataclass
 class This(Expr):
     """Acesso ao `this`."""
+    # Campo vazio para satisfazer o sistema de nós
+    _dummy: None = field(default=None, init=False)
+    
+    def eval(self, ctx: Ctx):
+        try:
+            return ctx["this"]
+        except KeyError:
+            raise NameError(f"variável this não existe!")
 
 @dataclass
 class Super(Expr):
@@ -181,7 +189,20 @@ class Setattr(Expr):
     def eval(self, ctx: Ctx):
         obj_val = self.obj.eval(ctx)
         val = self.value.eval(ctx)
-        setattr(obj_val, self.name, val)
+        
+        # Bloqueia setattr em classes e funções Lox
+        from .runtime import LoxClass, LoxFunction
+        if isinstance(obj_val, (LoxClass, LoxFunction)):
+            raise LoxError("Apenas instâncias podem ter campos.")
+        
+        # Para LoxInstance, usa o método set_field
+        from .runtime import LoxInstance
+        if isinstance(obj_val, LoxInstance):
+            obj_val.set_field(self.name, val)
+        else:
+            # Para outros objetos Python, usa setattr normal
+            setattr(obj_val, self.name, val)
+        
         return val
 
 # COMANDOS
